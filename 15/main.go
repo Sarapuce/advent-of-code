@@ -100,6 +100,66 @@ func canPushBox(m [][]string, command string, x int, y int) bool {
 	return false
 }
 
+func canPushNewBox(m [][]string, command string, x int, y int, boxPart string) bool {
+	var newX, newY int
+	mTemp := make([][]string, len(m))
+	for i := range m {
+		mTemp[i] = make([]string, len(m[i]))
+		copy(mTemp[i], m[i])
+	}
+	switch command {
+	case "v":
+		newX, newY = x+1, y
+	case "^":
+		newX, newY = x-1, y
+	case ">":
+		newX, newY = x, y+1
+	case "<":
+		newX, newY = x, y-1
+	default:
+		fmt.Println("Can't exec canPushNewBox")
+	}
+
+	if boxPart == "[" {
+		mTemp[x][y] = "."
+		mTemp[x][y+1] = "."
+		if m[newX][newY] == "#" || m[newX][newY+1] == "#" {
+			return false
+		} else if mTemp[newX][newY] == "." && mTemp[newX][newY+1] == "." {
+			return true
+		} else if mTemp[newX][newY] == "[" {
+			return canPushNewBox(m, command, newX, newY, "[")
+		} else if mTemp[newX][newY] == "]" && mTemp[newX][newY+1] == "." {
+			return canPushNewBox(m, command, newX, newY, "]")
+		} else if mTemp[newX][newY+1] == "[" && mTemp[newX][newY] == "." {
+			return canPushNewBox(m, command, newX, newY+1, "[")
+		} else if mTemp[newX][newY] == "]" && mTemp[newX][newY+1] == "[" {
+			return canPushNewBox(m, command, newX, newY, "]") && canPushNewBox(m, command, newX, newY+1, "[")
+		} else {
+			fmt.Println("Can't execute canPushNewBox")
+		}
+	} else if boxPart == "]" {
+		mTemp[x][y] = "."
+		mTemp[x][y-1] = "."
+		if m[newX][newY] == "#" || m[newX][newY-1] == "#" {
+			return false
+		} else if mTemp[newX][newY] == "." && mTemp[newX][newY-1] == "." {
+			return true
+		} else if mTemp[newX][newY] == "]" {
+			return canPushNewBox(m, command, newX, newY, "]")
+		} else if mTemp[newX][newY] == "[" && mTemp[newX][newY-1] == "." {
+			return canPushNewBox(m, command, newX, newY, "[")
+		} else if mTemp[newX][newY-1] == "]" && mTemp[newX][newY] == "." {
+			return canPushNewBox(m, command, newX, newY-1, "]")
+		} else if mTemp[newX][newY] == "[" && mTemp[newX][newY-1] == "]" {
+			return canPushNewBox(m, command, newX, newY, "[") && canPushNewBox(m, command, newX, newY-1, "]")
+		} else {
+			fmt.Println("Can't execute canPushNewBox")
+		}
+	}
+	return false
+}
+
 func pushBox(m [][]string, command string, x int, y int) {
 	var newX, newY int
 	switch command {
@@ -113,16 +173,69 @@ func pushBox(m [][]string, command string, x int, y int) {
 		newX, newY = x, y-1
 	default:
 		fmt.Println("Can't exec pushBox")
-		printMap(m)
-		print(command)
-		print(x)
-		print(y)
 	}
 
 	if m[newX][newY] == "." {
 		m[newX][newY] = "O"
 	} else if m[newX][newY] == "O" {
 		pushBox(m, command, newX, newY)
+	}
+}
+
+func pushNewBox(m [][]string, command string, x int, y int, boxPart string) {
+	var newX, newY int
+	mTemp := make([][]string, len(m))
+	for i := range m {
+		mTemp[i] = make([]string, len(m[i]))
+		copy(mTemp[i], m[i])
+	}
+	switch command {
+	case "v":
+		newX, newY = x+1, y
+	case "^":
+		newX, newY = x-1, y
+	case ">":
+		newX, newY = x, y+1
+	case "<":
+		newX, newY = x, y-1
+	default:
+		fmt.Println("Can't exec pushBox")
+	}
+
+	if boxPart == "[" {
+		mTemp[x][y] = "."
+		mTemp[x][y+1] = "." // Get a map status without the current box
+		if mTemp[newX][newY] == "[" || mTemp[newX][newY] == "]" {
+			pushNewBox(m, command, newX, newY, mTemp[newX][newY])
+			for i := range m {
+				mTemp[i] = make([]string, len(m[i]))
+				copy(mTemp[i], m[i])
+			}
+			mTemp[x][y] = "."
+			mTemp[x][y+1] = "." // mTemp must be sync with m (sorry it's late)
+		}
+		if mTemp[newX][newY+1] == "[" || mTemp[newX][newY+1] == "]" {
+			pushNewBox(m, command, newX, newY+1, mTemp[newX][newY+1])
+		}
+		m[x][y], m[x][y+1] = ".", "."
+		m[newX][newY], m[newX][newY+1] = "[", "]"
+	} else if boxPart == "]" {
+		mTemp[x][y] = "."
+		mTemp[x][y-1] = "." // Can be factorized, but it's late
+		if mTemp[newX][newY] == "[" || mTemp[newX][newY] == "]" {
+			pushNewBox(m, command, newX, newY, mTemp[newX][newY])
+			for i := range m {
+				mTemp[i] = make([]string, len(m[i]))
+				copy(mTemp[i], m[i])
+			}
+			mTemp[x][y] = "."
+			mTemp[x][y+1] = "."
+		}
+		if mTemp[newX][newY-1] == "[" || mTemp[newX][newY-1] == "]" {
+			pushNewBox(m, command, newX, newY-1, mTemp[newX][newY-1])
+		}
+		m[x][y], m[x][y-1] = ".", "."
+		m[newX][newY-1], m[newX][newY] = "[", "]"
 	}
 }
 
@@ -157,11 +270,54 @@ func move(m [][]string, command string) {
 	}
 }
 
+func newMove(m [][]string, command string) {
+	x, y := getRobotPos(m)
+	var newX, newY int
+	switch command {
+	case "v":
+		newX, newY = x+1, y
+	case "^":
+		newX, newY = x-1, y
+	case ">":
+		newX, newY = x, y+1
+	case "<":
+		newX, newY = x, y-1
+	default:
+		fmt.Println("Can't exec move")
+	}
+
+	if m[newX][newY] == "." {
+		moveRobot(m, x, y, newX, newY)
+	} else if m[newX][newY] == "[" {
+		if canPushNewBox(m, command, newX, newY, "[") {
+			pushNewBox(m, command, newX, newY, "[")
+			moveRobot(m, x, y, newX, newY)
+		}
+	} else if m[newX][newY] == "]" {
+		if canPushNewBox(m, command, newX, newY, "]") {
+			pushNewBox(m, command, newX, newY, "]")
+			moveRobot(m, x, y, newX, newY)
+		}
+	}
+}
+
 func checksum(m [][]string) int {
 	sum := 0
 	for x, line := range m {
 		for y, object := range line {
 			if object == "O" {
+				sum += (x * 100) + y
+			}
+		}
+	}
+	return sum
+}
+
+func newChecksum(m [][]string) int {
+	sum := 0
+	for x, line := range m {
+		for y, object := range line {
+			if object == "[" {
 				sum += (x * 100) + y
 			}
 		}
@@ -176,7 +332,10 @@ func main() {
 	}
 	fmt.Printf("Part 1 : %d\n", checksum(m))
 
+	m, commands = readInput()
 	newMap := getNewMap(m)
-	printMap(newMap)
-	fmt.Printf("Part 2 : %d\n", 0)
+	for _, c := range commands {
+		newMove(newMap, string(c))
+	}
+	fmt.Printf("Part 2 : %d\n", newChecksum(newMap))
 }
