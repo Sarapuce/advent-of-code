@@ -7,6 +7,134 @@ import (
 	"strings"
 )
 
+const size = 71
+
+type Point struct {
+	kind  string
+	value int
+}
+
+type coords [2]int
+
+type maze map[coords]Point
+
+func (m *maze) addWall(x int, y int) {
+	c := coords{x, y}
+	(*m)[c] = Point{"#", -1}
+}
+
+func (m *maze) addSurroundingWalls() {
+	for i := -1; i < size+1; i++ {
+		m.addWall(-1, i)
+		m.addWall(size, i)
+		m.addWall(i, -1)
+		m.addWall(i, size)
+	}
+}
+
+func (m maze) print() {
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			c := coords{x, y}
+			point, ok := m[c]
+			if !ok {
+				fmt.Print(".")
+			} else {
+				fmt.Print(point.kind)
+			}
+		}
+		fmt.Println()
+	}
+}
+
+func (m *maze) calculatePoint(c coords) []coords {
+	min := 5000 // greater than 70*70
+	nextNeighbors := make([]coords, 0)
+	neighbors := [4]coords{
+		{c[0] + 1, c[1]},
+		{c[0], c[1] + 1},
+		{c[0] - 1, c[1]},
+		{c[0], c[1] - 1}}
+
+	for _, neighbor := range neighbors {
+		p, ok := (*m)[neighbor]
+		if !ok {
+			(*m)[neighbor] = Point{".", -1}
+			nextNeighbors = append(nextNeighbors, neighbor)
+		} else {
+			if p.kind == "." {
+				nextNeighbors = append(nextNeighbors, neighbor)
+			} else if p.kind == "O" {
+				if p.value < min-1 {
+					min = p.value + 1
+				}
+			}
+		}
+	}
+	(*m)[c] = Point{"O", min}
+	return nextNeighbors
+}
+
+func (m *maze) bootstrapMaze() []coords {
+	nextNeighbors := make([]coords, 0)
+	(*m)[coords{0, 0}] = Point{"O", 0}
+	point, ok := (*m)[coords{1, 0}]
+	if !ok {
+		(*m)[coords{1, 0}] = Point{".", 0}
+		nextNeighbors = append(nextNeighbors, coords{1, 0})
+	} else if point.kind != "#" {
+		nextNeighbors = append(nextNeighbors, coords{1, 0})
+	}
+
+	point, ok = (*m)[coords{0, 1}]
+	if !ok {
+		(*m)[coords{0, 1}] = Point{".", 0}
+		nextNeighbors = append(nextNeighbors, coords{0, 1})
+	} else if point.kind != "#" {
+		nextNeighbors = append(nextNeighbors, coords{0, 1})
+	}
+	return nextNeighbors
+}
+
+func (m *maze) isSolved() bool {
+	end, ok := (*m)[coords{size - 1, size - 1}]
+	return ok && end.kind == "O"
+}
+
+func (m *maze) getPathLength() int {
+	end := (*m)[coords{size - 1, size - 1}]
+	return end.value
+}
+
+func (m *maze) solve() (int, bool) {
+	neighbors := m.bootstrapMaze()
+	for solved := m.isSolved(); !solved; solved = m.isSolved() {
+		nextNeighbord := make([]coords, 0)
+		for _, neighbor := range neighbors {
+			nextNeighbord = append(nextNeighbord, m.calculatePoint(neighbor)...)
+		}
+		nextNeighbord = removeDuplicates(nextNeighbord)
+		neighbors = nextNeighbord
+		if len(neighbors) == 0 && !m.isSolved() {
+			return -1, false
+		}
+	}
+	return m.getPathLength(), true
+}
+
+func removeDuplicates(slice []coords) []coords {
+	seen := make(map[coords]bool)
+	result := []coords{}
+
+	for _, val := range slice {
+		if _, ok := seen[val]; !ok {
+			seen[val] = true
+			result = append(result, val)
+		}
+	}
+	return result
+}
+
 func removeEmptyStrings(s []string) []string {
 	var r []string
 	for _, str := range s {
@@ -17,7 +145,7 @@ func removeEmptyStrings(s []string) []string {
 	return r
 }
 
-func readInput() [][2]int {
+func readInput() []coords {
 	fileName := "input.txt"
 	var elements []string
 	var x, y int
@@ -29,95 +157,47 @@ func readInput() [][2]int {
 	inputs := strings.Split(dataString, "\n")
 	inputs = removeEmptyStrings(inputs)
 
-	wrongBytes := make([][2]int, len(inputs))
+	walls := make([]coords, len(inputs))
 	for i, input := range inputs {
 		elements = strings.Split(input, ",")
 		x, _ = strconv.Atoi(elements[0])
 		y, _ = strconv.Atoi(elements[1])
-		wrongBytes[i][0], wrongBytes[i][1] = x, y
+		walls[i] = coords{x, y}
 	}
 
-	return wrongBytes
+	return walls
 }
 
-func printMap(m [][]string) {
-	for _, line := range m {
-		for _, c := range line {
-			fmt.Print(c)
+func createMaze(inputs []coords, wallToPLace int) maze {
+	m := maze{}
+	for i, input := range inputs {
+		if i >= wallToPLace {
+			break
 		}
-		fmt.Println()
+		m.addWall(input[0], input[1])
 	}
+	return m
 }
 
-func createMaze(wrongBytes [][2]int, size int) [][]string {
-	maze := make([][]string, size)
-	for i := 0; i < size; i++ {
-		maze[i] = make([]string, size)
-		for j := 0; j < size; j++ {
-			maze[i][j] = "."
-		}
-	}
-	var x, y int
-	for _, wrongByte := range wrongBytes {
-		x, y = wrongByte[0], wrongByte[1]
-		maze[y][x] = "#"
-	}
-	maze[0][0] = "0"
-	return maze
-}
-
-func getPossible(x int, y int, maze [][]string) [][2]int {
-	possibility := make([][2]int, 0)
-	if x-1 >= 0 && maze[y][x-1] != "#" {
-		possibility = append(possibility, [2]int{y, x - 1})
-	}
-	if x+1 < len(maze) && maze[y][x+1] != "#" {
-		possibility = append(possibility, [2]int{y, x + 1})
-	}
-	if y-1 >= 0 && maze[y-1][x] != "#" {
-		possibility = append(possibility, [2]int{y - 1, x})
-	}
-	if y+1 < len(maze) && maze[y+1][x] != "#" {
-		possibility = append(possibility, [2]int{y + 1, x})
-	}
-	return possibility
-}
-
-func fillCase(x int, y int, maze [][]string) {
-	if maze[y][x] != "." {
-		return
-	}
-	var xx, yy, value int
-	minimal := 70 * 70
-	possibility := getPossible(x, y, maze)
-	nextCase := make([][2]int, 0)
-	for _, possibility := range possibility {
-		xx, yy = possibility[0], possibility[1]
-		value64, err := strconv.ParseInt(maze[yy][xx], 10, 64)
-		if err == nil {
-			value = int(value64)
-			if value < minimal {
-				minimal = value
-			}
-		} else {
-			nextCase = append(nextCase, [2]int{xx, yy})
+func addBytesUntilImpossible(c []coords) coords {
+	for i := 1024; i < len(c); i++ {
+		m := createMaze(c, i)
+		m.addSurroundingWalls()
+		_, solved := m.solve()
+		if !solved {
+			return c[i-1]
 		}
 	}
-	newValueStr := strconv.FormatInt(int64(minimal+1), 10)
-	maze[y][x] = newValueStr
-	for _, next := range nextCase {
-		xx, yy = next[0], next[1]
-		fillCase(xx, yy, maze)
-	}
+	return coords{0, 0}
 }
 
 func main() {
-	wrongBytes := readInput()
-	maze := createMaze(wrongBytes, 7)
-	fillCase(0, 1, maze)
-	fillCase(1, 0, maze)
-	fmt.Println(maze)
-	fmt.Printf("Part 1 : %d\n", 0)
+	coords := readInput()
+	m := createMaze(coords, 1024)
+	m.addSurroundingWalls()
+	pathLenth, _ := m.solve()
+	fmt.Printf("Part 1 : %d\n", pathLenth)
 
-	fmt.Printf("Part 2 : %d\n", 0)
+	c := addBytesUntilImpossible(coords)
+	fmt.Printf("Part 2 : %d,%d\n", c[0], c[1])
 }
